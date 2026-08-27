@@ -42,3 +42,57 @@ def create_mapping(
     db.refresh(db_mapping)
 
     return db_mapping
+
+def find_mapping(
+        db:Session, 
+        normalized_description: str
+    ) -> MerchantMapping | None:
+
+    description = normalized_description.upper().strip()
+
+    statement = select(MerchantMapping)
+    mappings = db.scalars(statement).all()
+
+    print("DESCRIPTION:", repr(description))
+
+    for mapping in mappings:
+        print(
+            "DB MAPPING:",
+            repr(mapping.match_text),
+            "MATCH:",
+            mapping.match_text.upper().strip() in description,
+        )
+
+    match_mappings = [
+        mapping
+        for mapping in mappings
+        if mapping.match_text
+        and mapping.match_text.upper().strip() in description
+    ]
+
+    if not match_mappings:
+        return None
+
+    
+
+    return max(
+        match_mappings,
+        key=lambda mapping: len(mapping.match_text),
+    )
+
+def delete_mapping(
+    db: Session,
+    mapping_id: int
+)-> bool:
+    mapping = db.get(
+        MerchantMapping,
+        mapping_id,
+    )
+
+    if mapping is None:
+        return False
+
+    db.delete(mapping)
+    db.commit()
+
+    return True

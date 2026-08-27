@@ -69,13 +69,14 @@ def statement_upload(
                 "match_text": mapping.match_text,
                 "merchant": mapping.merchant,
                 "category": mapping.category,
+                
             }
             for mapping in saved_mapping_records
         ]
 
         df_final = categorizer.categorize_transactions(
             df=df_final,
-            saved_mappings=saved_mappings,
+            db=db,
         )
   
     except StatementParserError as exc:

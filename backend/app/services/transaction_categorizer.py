@@ -3,10 +3,13 @@
 from dataclasses import dataclass
 from typing import Iterable
 
+from sqlalchemy.orm import Session
+
 import pandas as pd
 
 from app.core.merchant_rules import MERCHANT_RULES
 from app.core.categories import DEFAULT_CATEGORY
+from app.repositories.merchant_mapping_repository import find_mapping
 
 
 @dataclass
@@ -15,6 +18,7 @@ class CategorizationResult:
     category: str
     is_categorized: bool
     matched_rule: str | None = None
+    mapping_source: str | None = None
 
 
 class TransactionCategorizer:
@@ -36,18 +40,25 @@ class TransactionCategorizer:
     def categorize(
         self,
         normalized_description: str,
-        saved_mappings: Iterable[dict] | None = None,
+        db: Session,
     ) -> CategorizationResult:
         description = normalized_description.upper().strip()
 
-        saved_mapping_result = self._match_saved_mapping(
-            description=description,
-            saved_mappings=saved_mappings or [],
+        # 1. User-saved database mapping
+        saved_mapping = find_mapping(
+            db,
+            description,
         )
 
-        if saved_mapping_result:
-            return saved_mapping_result
-        
+        if saved_mapping:
+            return CategorizationResult(
+                merchant=saved_mapping.merchant,
+                category=saved_mapping.category,
+                is_categorized=True,
+                matched_rule=saved_mapping.match_text,
+                mapping_source="user",
+            )
+            
         rule_result = self._match_merchant_rule(description)
 
         if rule_result:
@@ -56,39 +67,10 @@ class TransactionCategorizer:
         return CategorizationResult(
             merchant=None,
             category=DEFAULT_CATEGORY,
-            is_categorized=False
+            is_categorized=False,
+            mapping_source=None,
         )
     
-    def _match_saved_mapping(
-        self,
-        description: str,
-        saved_mappings: Iterable[dict],
-    ) -> CategorizationResult | None:
-        """
-        Match rules previously selected and saved by the user.
-
-        Expected mapping structure:
-
-        {
-            "match_text": "AMAZON PAY INDIA",
-            "merchant": "Amazon",
-            "category": "Shopping"
-        }
-        """
-
-        for mapping in saved_mappings:
-            match_text = str(mapping.get("match_text", "")).upper().strip()
-
-            if match_text and match_text in description:
-                return CategorizationResult(
-                    merchant=mapping["merchant"],
-                    category=mapping["category"],
-                    is_categorized=True,
-                    matched_rule=match_text,
-                )
-            
-        return None
-        
     def _match_merchant_rule(
         self,
         description: str
@@ -106,9 +88,9 @@ class TransactionCategorizer:
         """
 
         for rule in self.merchant_rules:
-            keywords = rule.get("keywords", [])
+            match_text = rule.get("match_text", [])
 
-            for keyword in keywords:
+            for keyword in match_text:
                 normalize_keyword = keyword.upper().strip()
 
                 if normalize_keyword in description:
@@ -117,13 +99,14 @@ class TransactionCategorizer:
                         category=rule["category"],
                         is_categorized=True,
                         matched_rule=normalize_keyword,
+                        mapping_source="rule",
                     )
         return None
 
     def categorize_transactions(
         self,
         df: pd.DataFrame,
-        saved_mappings: Iterable[dict] | None = None,
+        db: Session,
     ) -> pd.DataFrame:
         """
         Categorize all transactions in a normalized DataFrame.
@@ -142,7 +125,7 @@ class TransactionCategorizer:
         results = categorized_df["normalized_description"].apply(
             lambda description: self.categorize(
                 normalized_description=str(description),
-                saved_mappings=saved_mappings,
+                db=db,
             )
         )
 
@@ -157,6 +140,9 @@ class TransactionCategorizer:
         )
         categorized_df["matched_rule"] = results.apply(
             lambda result: result.matched_rule
+        )
+        categorized_df["mapping_source"] = results.apply(
+            lambda result: result.mapping_source
         )
 
         return categorized_df

@@ -11,7 +11,10 @@ class TransactionResponse(BaseModel):
     amount: float | None
     transaction_type : str
     normalized_description: str
+
     merchant: str | None = None
     category: str
     is_categorized: bool
+    
     matched_rule: str | None = None
+    mapping_source: str | None = None
