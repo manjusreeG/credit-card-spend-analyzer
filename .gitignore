@@ -10,6 +10,12 @@
 !.yarn/releases
 !.yarn/versions
 
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
 # testing
 /coverage
 
@@ -31,8 +37,22 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
 # env files (can opt-in for committing if needed)
-.env*
+.env.*
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
 
 # vercel
 .vercel
